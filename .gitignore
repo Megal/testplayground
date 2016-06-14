@@ -29,7 +29,7 @@ xcuserdata/
 
 ## Playgrounds
 timeline.xctimeline
-playground.xcworkspace
+#playground.xcworkspace
 
 # Swift Package Manager
 #
