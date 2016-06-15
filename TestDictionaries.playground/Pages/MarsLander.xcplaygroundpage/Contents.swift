@@ -63,12 +63,49 @@ for turn in 0..<3000 {
 	if turn == 0 {
 		log("Calculating traectory \((lander.X, lander.Y)) -> \(world.target): ...")
 		generation = Generation(world: world, lander: lander)
+
+		let fitnessVX: Generation.ErrorFn = { (lander) in
+			if (-20...20) ~= lander.hSpeed {
+				return 0.0
+			} else {
+				return fabs(lander.hSpeed) - 20
+			}
+		}
+		let fitnessVY: Generation.ErrorFn = { (lander) in
+			if (-40...0) ~= lander.vSpeed {
+				return 0.0
+			} else {
+				return fabs(lander.vSpeed) - 40
+			}
+		}
+		let straightLanding: Generation.ErrorFn = { (lander) in
+			if lander.rotate == 0 {
+				return 0.0
+			} else {
+				return 1.0
+			}
+		}
+		let radar: Generation.ErrorFn = { (lander) in
+			let (x, y) = (lander.X, lander.Y)
+			if (0...7000) ~= x && (0...3000) ~= y {
+				return 0.0
+			} else {
+				return 1.0
+			}
+		}
+
+		generation.fitnessFunc.append((fn: fitnessVX, weight: 1.0))
+		generation.fitnessFunc.append((fn: fitnessVY, weight: 1.0))
+		generation.fitnessFunc.append((fn: straightLanding, weight: 0.5))
+		generation.fitnessFunc.append((fn: radar, weight: 2))
+
 		generation.populateToLimitWithRandom()
 		generation.evolution(cycles: 10)
 	} else {
 		generation.incrementAge(marsLander: lander)
 		generation.evalTTL()
 		generation.evolution(cycles: 3)
+		generation.fitnessScore
 	}
 
 	action = generation.bestChomosome().genes[0].action

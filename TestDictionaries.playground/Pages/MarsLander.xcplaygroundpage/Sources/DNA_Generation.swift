@@ -2,16 +2,23 @@ import Darwin.C
 
 public struct Generation {
 	public var current: [Chromosome] = []
+	public var fitnessScore: [Double] = []
+
 	public let populationLimit = 20
 	public let crossingoverRate = 2
 	public let mutationRate = 3
 	public let world: World
 	public var lander: MarsLander
-	public var ordered = false
+	public var fitnessScored = false {
+		didSet { sorted = false	}
+	}
+	public var sortedIndexes: [Int] = []
+	public var sorted = false
 
 	public var lastEvaluatedPath: [Double2d] = []
-	public typealias Comparation = (left: MarsLander, right: MarsLander) -> Bool
-	public var fitnessFunc: [(fn: Comparation, weight: Double)] = []
+	//! 0 is acceptable, >0 and more is worse
+	public typealias ErrorFn = (MarsLander) -> Double
+	public var fitnessFunc: [(fn: ErrorFn, weight: Double)] = []
 
 	public init(world: World, lander: MarsLander) {
 		self.world = world
@@ -23,7 +30,7 @@ public struct Generation {
 public extension Generation {
 
 	mutating func evalTTL() {
-		guard ordered == false else { return }
+		guard fitnessScored == false else { return }
 
 		for (currentIndex, sample) in current.enumerate() {
 			guard sample.ttl < 0 else { continue }
@@ -31,42 +38,74 @@ public extension Generation {
 			evalTTL(&current[currentIndex])
 		}
 
-		current.sortInPlace{ (a, b) in a.ttl > b.ttl }
-		ordered = true
+		evalFitness()
+	}
+
+	mutating func evalFitness() {
+		guard !fitnessScored else { return }
+		defer {
+			fitnessScored = true
+		}
+
+		guard case let N = current.count where N > 0 else { return }
+		fitnessScore = [Double](count: N, repeatedValue: 1.0)
+
+		for (fn, denormWeight) in fitnessFunc {
+			let weight = denormWeight / Double(N)
+			let errors = current.map { $0.blackBox!.-->fn }
+			let indexes = (0..<N).map { (i: Int($0), e: errors[$0]) }
+			let worstFirst = indexes.sort { $0.e > $1.e }
+
+			var worse = 0
+			for i in 1..<N {
+				let prev = worstFirst[i-1]
+				let cur = worstFirst[i]
+
+				if prev.e > 1e-9 + cur.e {
+					worse = i
+				}
+
+				fitnessScore[cur.i] += weight * Double(worse)
+			}
+		}
 	}
 
 	mutating func sort() {
-		guard !ordered else { return }
+		guard fitnessScored else { assert(false, "you should call evalFitness() before this method"); return }
+		guard !sorted else { return }
+		defer {
+			sorted = true
+		}
 
-		// TODO Implement sorting using additional fitess functions
-//		for (fn, weight) in fitnessFunc {
-//			let indexes = (0..<current.count).map { Int($0) }
-//			indexes.sortInPlace {
-//				let left = current[$0]
-//				let right = current[$1]
-//				return left >
-//			}
-//		}
-
-		current.sortInPlace{ (a, b) in a.ttl > b.ttl }
-		ordered = true
+		guard case let N = current.count where N > 0 else { return }
+		sortedIndexes = (0..<N).map { Int($0) }
+		.sort { (i, j) in
+			if fitnessScore[i] == fitnessScore[j] {
+				return current[i].ttl > current[j].ttl
+			} else {
+				return fitnessScore[i] > fitnessScore[j]
+			}
+		}
 	}
 
 	mutating func evalBest() {
 		evalTTL()
-		evalTTL(&current[0])
+		sort()
+		evalTTL(&current[sortedIndexes[0]])
 	}
 
 	mutating func evalSuboptimal(place n: Int ) {
 		evalTTL()
-		evalTTL(&current[n])
+		sort()
+		evalTTL(&current[sortedIndexes[n]])
 	}
 
 	private mutating func evalTTL(inout chromosome: Chromosome) {
 		let oldTTL = chromosome.ttl
 		defer {
+			assert(chromosome.blackBox != nil, "blackbox is necessary")
 			if chromosome.ttl != oldTTL || oldTTL < 0 {
-				ordered = false
+				fitnessScored = false
 			}
 		}
 
@@ -128,7 +167,7 @@ public extension Generation {
 			current.append(newChromosome)
 		}
 
-		ordered = false
+		fitnessScored = false
 	}
 
 	mutating func addMutantsWithRandomTailOrHead() {
@@ -140,7 +179,7 @@ public extension Generation {
 			current.append(makeMutant(sample, species: .BodyMutant))
 		}
 
-		ordered = false
+		fitnessScored = false
 	}
 
 	enum MutantSpecies {
@@ -176,12 +215,15 @@ public extension Generation {
 		guard current.count > limit else { return }
 
 		evalTTL()
-		current.removeRange(limit..<current.count)
+		sort()
+		current = sortedIndexes.prefix(limit).map{ current[$0] }
+		fitnessScored = false
 	}
 
 	mutating func bestChomosome() -> Chromosome {
 		evalTTL()
-		return current.first!
+		sort()
+		return current[sortedIndexes[0]]
 	}
 
 	mutating func incrementAge(marsLander next: MarsLander) {
@@ -190,7 +232,7 @@ public extension Generation {
 			current[i].incrementAge()
 		}
 
-		ordered = false
+		fitnessScored = false
 	}
 }
 
