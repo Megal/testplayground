@@ -93,11 +93,21 @@ for turn in 0..<3000 {
 				return 1.0
 			}
 		}
+		let targetX = world.target.x
+		let deltaX: Generation.ErrorFn = { (lander: MarsLander) in
+			let dist = fabs(targetX - lander.X)
+			if dist < 500.0 {
+				return 0.0
+			} else {
+				return dist - 500.0
+			}
+		}
 
-		generation.fitnessFunc.append((fn: fitnessVX, weight: 1.0))
-		generation.fitnessFunc.append((fn: fitnessVY, weight: 1.0))
+		generation.fitnessFunc.append((fn: fitnessVX, weight: 4.0))
+		generation.fitnessFunc.append((fn: fitnessVY, weight: 4.0))
 		generation.fitnessFunc.append((fn: straightLanding, weight: 0.5))
-		generation.fitnessFunc.append((fn: radar, weight: 2))
+		generation.fitnessFunc.append((fn: radar, weight: 8.0))
+		generation.fitnessFunc.append((fn: deltaX, weight: 1.0))
 
 		generation.populateToLimitWithRandom()
 		generation.evolution(cycles: 10)
@@ -108,7 +118,8 @@ for turn in 0..<3000 {
 		generation.fitnessScore
 	}
 
-	action = generation.bestChomosome().genes[0].action
+	let best = generation.bestChomosome()
+	action = best.genes[0].action
 	for place in (1..<10).reverse() {
 		generation.populationLimit * (1 + (place) / (10))
 		generation.evalSuboptimal(place: place)

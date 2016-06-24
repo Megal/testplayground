@@ -104,6 +104,7 @@ public extension Generation {
 		let oldTTL = chromosome.ttl
 		defer {
 			assert(chromosome.blackBox != nil, "blackbox is necessary")
+			if chromosome.blackBox == nil {fatal("assert not working")}
 			if chromosome.ttl != oldTTL || oldTTL < 0 {
 				fitnessScored = false
 			}
@@ -112,6 +113,7 @@ public extension Generation {
 		lastEvaluatedPath.removeAll()
 		var evolvingLander = lander; lastEvaluatedPath.append((x: evolvingLander.X, y: evolvingLander.Y))
 		var ttl = 0
+		chromosome.genes.append(Chromosome.neutralGene)
 		for (geneIndex, (action: action, duration: duration)) in chromosome.genes.enumerate() {
 			for turnSameAction in 0..<duration {
 				ttl += 1
@@ -125,9 +127,10 @@ public extension Generation {
 
 				let isLanded = world.testLanded(marsLander: nextLander)
 				if isLanded {
+					let prefixChromosome = chromosome.prefix(ttl)
+					chromosome = prefixChromosome
 					chromosome.ttl = Chromosome.maxTTL + nextLander.fuel
 					chromosome.blackBox = nextLander
-					return
 				} else {
 					let alternativeLander = world.simulate(marsLander: evolvingLander, action: Chromosome.neutralGene.action)
 					if world.testLanded(marsLander: alternativeLander) {
@@ -136,14 +139,17 @@ public extension Generation {
 						chromosome.ttl = Chromosome.maxTTL + alternativeLander.fuel
 						chromosome.blackBox = alternativeLander
 					} else {
+						let prefixChromosome = chromosome.prefix(ttl)
+						chromosome = prefixChromosome
 						chromosome.ttl = ttl
 						chromosome.blackBox = nextLander
-						return
 					}
 				}
+
+				return
 			}
 		}
-		assert(false)
+		fatal("shouldn't be here " + #function + "\(chromosome)")
 	}
 }
 
