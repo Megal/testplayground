@@ -2,18 +2,12 @@
 
 import Foundation
 
-getpid()
-//system("lsof -p \(getpid()) >&2")
-//system("cat \"\(__FILE__)\" >&2")
-// system("lsof -w -p \(getpid()) >&2")
-// system("find /opt/ -lname swift >&2")
-system("/opt/coderunner/swift/usr/bin/swiftc -version >&2")
 
 import XCPlayground
 let myGameVC = GameViewController()
 XCPlaygroundPage.currentPage.liveView = myGameVC.view
 
-if let inputFile = NSBundle.mainBundle().pathForResource("input", ofType: "txt") {
+if let inputFile = NSBundle.mainBundle().pathForResource("input4", ofType: "txt") {
 	freopen(inputFile, "r", stdin)
 }
 
@@ -99,7 +93,17 @@ for turn in 0..<3000 {
 			if dist < 500.0 {
 				return 0.0
 			} else {
-				return dist - 500.0
+				return Double(Int((dist - 500.0) / 10.0))
+			}
+		}
+		let gluttony: Generation.ErrorFn = { (lander: MarsLander) in
+			return Double(lander.fuel)
+		}
+		let deadman: Generation.ErrorFn = { (lander: MarsLander) in
+			if lander.fuel <= 100 {
+				return 0.0
+			} else {
+				return 1.0 / Double(lander.fuel - 100)
 			}
 		}
 
@@ -107,7 +111,9 @@ for turn in 0..<3000 {
 		generation.fitnessFunc.append((fn: fitnessVY, weight: 4.0))
 		generation.fitnessFunc.append((fn: straightLanding, weight: 0.5))
 		generation.fitnessFunc.append((fn: radar, weight: 8.0))
-		generation.fitnessFunc.append((fn: deltaX, weight: 1.0))
+		generation.fitnessFunc.append((fn: deltaX, weight: 10.0))
+		generation.fitnessFunc.append((fn: gluttony, weight: 10.0))
+		generation.fitnessFunc.append((fn: deadman, weight: 5.0))
 
 		generation.populateToLimitWithRandom()
 		generation.evolution(cycles: 10)
